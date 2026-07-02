@@ -1,0 +1,140 @@
+using UnityEngine;
+using UnityEngine.EventSystems;
+
+public class ViewerModelController_PRO : MonoBehaviour
+{
+    [Header("Assign in Inspector")]
+    public Camera viewerCamera;
+    public GameObject modelPrefab; // your crane prefab from Project
+
+    [Header("Spawn")]
+    public float spawnDistanceMeters = 2.2f;    // not too close
+    public float targetModelSizeMeters = 0.8f;  // consistent size
+    public float yawOffsetDegrees = 180f;       // change to 0 if facing wrong
+
+    [Header("Manipulation")]
+    public float rotationSpeed = 0.25f;
+    public float pinchScaleSpeed = 0.0015f;
+    public float minScale = 0.2f;
+    public float maxScale = 2.0f;
+
+    private Transform spawned;
+
+    void Start()
+    {
+        if (viewerCamera == null) viewerCamera = Camera.main;
+    }
+
+    void Update()
+    {
+        if (viewerCamera == null) return;
+
+        // Tap to spawn (first time)
+        if (spawned == null)
+        {
+            if (TapBegan() && !IsOverUI())
+                SpawnInFront();
+            return;
+        }
+
+        // Rotate + pinch
+        if (!IsOverUI())
+        {
+            HandleRotate();
+            HandlePinch();
+        }
+    }
+
+    private void SpawnInFront()
+    {
+        if (modelPrefab == null)
+        {
+            Debug.LogError("ViewerModelController_PRO: modelPrefab is NONE. Drag your crane prefab into the field.");
+            return;
+        }
+
+        Vector3 pos = viewerCamera.transform.position + viewerCamera.transform.forward * spawnDistanceMeters;
+        Quaternion rot = Quaternion.Euler(0, yawOffsetDegrees, 0);
+
+        GameObject go = Instantiate(modelPrefab, pos, rot);
+        spawned = go.transform;
+
+        FitToTargetSize(spawned, targetModelSizeMeters);
+
+        // Tell play/pause which model to rotate
+        ModelUIController_PRO.SetCurrentModelRoot(spawned);
+    }
+
+    private void HandleRotate()
+    {
+        Vector2 delta;
+
+        if (Input.touchCount == 1)
+        {
+            Touch t = Input.GetTouch(0);
+            if (t.phase != TouchPhase.Moved) return;
+            delta = t.deltaPosition;
+        }
+        else if (Input.GetMouseButton(0))
+        {
+            delta = new Vector2(Input.GetAxis("Mouse X"), Input.GetAxis("Mouse Y")) * 15f;
+        }
+        else return;
+
+        float yaw = -delta.x * rotationSpeed;
+        float pitch = delta.y * rotationSpeed;
+
+        spawned.Rotate(Vector3.up, yaw, Space.World);
+        spawned.Rotate(viewerCamera.transform.right, pitch, Space.World);
+    }
+
+    private void HandlePinch()
+    {
+        if (Input.touchCount != 2) return;
+
+        Touch a = Input.GetTouch(0);
+        Touch b = Input.GetTouch(1);
+
+        float prev = Vector2.Distance(a.position - a.deltaPosition, b.position - b.deltaPosition);
+        float cur = Vector2.Distance(a.position, b.position);
+
+        float delta = cur - prev;
+        float s = delta * pinchScaleSpeed;
+
+        float next = Mathf.Clamp(spawned.localScale.x + s, minScale, maxScale);
+        spawned.localScale = Vector3.one * next;
+    }
+
+    private bool TapBegan()
+    {
+        if (Input.touchCount > 0) return Input.GetTouch(0).phase == TouchPhase.Began;
+        return Input.GetMouseButtonDown(0);
+    }
+
+    private bool IsOverUI()
+    {
+        if (EventSystem.current == null) return false;
+
+        if (Input.touchCount > 0)
+            return EventSystem.current.IsPointerOverGameObject(Input.GetTouch(0).fingerId);
+
+        return EventSystem.current.IsPointerOverGameObject();
+    }
+
+    private void FitToTargetSize(Transform root, float targetMeters)
+    {
+        if (targetMeters <= 0) return;
+
+        var rs = root.GetComponentsInChildren<Renderer>();
+        if (rs.Length == 0) return;
+
+        Bounds b = rs[0].bounds;
+        for (int i = 1; i < rs.Length; i++) b.Encapsulate(rs[i].bounds);
+
+        float maxDim = Mathf.Max(b.size.x, b.size.y, b.size.z);
+        if (maxDim < 0.0001f) return;
+
+        float scale = targetMeters / maxDim;
+        root.localScale *= scale;
+    }
+}

@@ -1,0 +1,41 @@
+using UnityEngine;
+using UnityEngine.UI;
+
+public class BGColorCycle_ViewerOnly : MonoBehaviour
+{
+    [Header("Drag BTN_BGCircle here")]
+    [SerializeField] private Button btnBGCircle;
+
+    [Header("Drag MAT_BG here (Material used by BG_Quad)")]
+    [SerializeField] private Material bgMaterial;
+
+    private int index = 0;
+
+    // Light Black -> Dark Grey -> Light Blue
+    private readonly Color[] colors =
+ {
+    new Color(0.95f, 0.72f, 0.72f, 1f), // Soft light red
+    new Color(0.74f, 0.90f, 0.78f, 1f), // Soft light green
+    new Color(0.65f, 0.78f, 0.92f, 1f)  // Soft light blue
+};
+
+    void Start()
+    {
+        if (btnBGCircle != null)
+            btnBGCircle.onClick.AddListener(Cycle);
+
+        ApplyColor();
+    }
+
+    private void Cycle()
+    {
+        index = (index + 1) % colors.Length;
+        ApplyColor();
+    }
+
+    private void ApplyColor()
+    {
+        if (bgMaterial == null) return;
+        bgMaterial.color = colors[index];
+    }
+}

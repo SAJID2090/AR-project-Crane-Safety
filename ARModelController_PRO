@@ -1,0 +1,149 @@
+using System.Collections.Generic;
+using UnityEngine;
+using UnityEngine.EventSystems;
+using UnityEngine.UI;
+using UnityEngine.XR.ARFoundation;
+using UnityEngine.XR.ARSubsystems;
+
+public class ARModelController_PRO : MonoBehaviour
+{
+    [Header("Assign in Inspector")]
+    public ARRaycastManager raycastManager;
+    public Camera arCamera;
+
+    [Header("Model Prefab")]
+    public GameObject modelPrefab;
+
+    [Header("Placement")]
+    public bool placeOnlyOnce = true;
+    public float targetModelSizeMeters = 0.6f;
+    public float yawOffsetDegrees = 0f;
+
+    [Header("Manipulation")]
+    public float rotationSpeed = 0.25f;     // drag rotate
+    public float pinchScaleSpeed = 0.0015f; // pinch scale
+    public float minScale = 0.2f;
+    public float maxScale = 2f;
+
+    [Header("Optional UI")]
+    public Button btnAR;
+    public Button btnPlayPause;
+
+    Transform spawned;
+    static List<ARRaycastHit> hits = new List<ARRaycastHit>();
+
+    // pinch
+    float lastPinchDist;
+
+    void Update()
+    {
+        if (raycastManager == null || arCamera == null) return;
+
+        // 1 touch = place OR rotate
+        if (Input.touchCount == 1)
+        {
+            Touch t = Input.GetTouch(0);
+
+            // IMPORTANT: correct UI check on mobile
+            if (EventSystem.current != null && EventSystem.current.IsPointerOverGameObject(t.fingerId))
+                return;
+
+            if (t.phase == TouchPhase.Began)
+            {
+                TryPlaceOrMove(t.position);
+            }
+            else if (t.phase == TouchPhase.Moved)
+            {
+                if (spawned != null)
+                    RotateByDrag(t.deltaPosition);
+            }
+        }
+
+        // 2 touches = pinch scale
+        if (Input.touchCount == 2 && spawned != null)
+        {
+            Touch t0 = Input.GetTouch(0);
+            Touch t1 = Input.GetTouch(1);
+
+            // if either finger is on UI, ignore pinch
+            if (EventSystem.current != null &&
+                (EventSystem.current.IsPointerOverGameObject(t0.fingerId) || EventSystem.current.IsPointerOverGameObject(t1.fingerId)))
+                return;
+
+            float dist = Vector2.Distance(t0.position, t1.position);
+
+            if (t0.phase == TouchPhase.Began || t1.phase == TouchPhase.Began)
+            {
+                lastPinchDist = dist;
+            }
+            else
+            {
+                float delta = dist - lastPinchDist;
+                lastPinchDist = dist;
+
+                float s = 1f + (delta * pinchScaleSpeed);
+                Vector3 newScale = spawned.localScale * s;
+
+                float clamped = Mathf.Clamp(newScale.x, minScale, maxScale);
+                spawned.localScale = new Vector3(clamped, clamped, clamped);
+            }
+        }
+    }
+
+    void TryPlaceOrMove(Vector2 screenPos)
+    {
+        if (!raycastManager.Raycast(screenPos, hits, TrackableType.PlaneWithinPolygon))
+            return;
+
+        Pose p = hits[0].pose;
+
+        if (spawned == null)
+        {
+            spawned = Instantiate(modelPrefab, p.position, Quaternion.identity).transform;
+            FaceCameraWithYaw(spawned);
+            FitToTargetSize(spawned, targetModelSizeMeters);
+        }
+        else
+        {
+            if (placeOnlyOnce) return;
+
+            spawned.position = p.position;
+            FaceCameraWithYaw(spawned);
+        }
+    }
+
+    void FaceCameraWithYaw(Transform t)
+    {
+        Vector3 forward = arCamera.transform.forward;
+        forward.y = 0f;
+        if (forward.sqrMagnitude < 0.001f) forward = Vector3.forward;
+
+        Quaternion look = Quaternion.LookRotation(forward.normalized, Vector3.up);
+        t.rotation = look * Quaternion.Euler(0f, yawOffsetDegrees, 0f);
+    }
+
+    void RotateByDrag(Vector2 delta)
+    {
+        // Finger right = model right (fix inverted feeling)
+        float yaw = -delta.x * rotationSpeed;
+        float pitch = delta.y * rotationSpeed;
+
+        spawned.Rotate(Vector3.up, yaw, Space.World);
+        spawned.Rotate(arCamera.transform.right, pitch, Space.World);
+    }
+
+    void FitToTargetSize(Transform root, float targetMeters)
+    {
+        var rends = root.GetComponentsInChildren<Renderer>();
+        if (rends == null || rends.Length == 0) return;
+
+        Bounds b = rends[0].bounds;
+        for (int i = 1; i < rends.Length; i++) b.Encapsulate(rends[i].bounds);
+
+        float largest = Mathf.Max(b.size.x, b.size.y, b.size.z);
+        if (largest <= 0.0001f) return;
+
+        float k = targetMeters / largest;
+        root.localScale = root.localScale * k;
+    }
+}

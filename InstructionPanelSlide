@@ -1,0 +1,147 @@
+using System.Collections;
+using UnityEngine;
+using UnityEngine.UI;
+
+public class InstructionPanelSlide : MonoBehaviour
+{
+    [Header("Links (drag in Prefab Mode)")]
+    public RectTransform panel;          // PANEL_Instructions RectTransform
+    public CanvasGroup panelGroup;       // CanvasGroup on PANEL_Instructions
+    public Button bookButton;            // BTN_Book
+    public Button blockerButton;         // Blocker (Button) full-screen invisible
+
+    [Header("Popup Feel")]
+    public float popDuration = 0.18f;    // fast
+    public float closedScale = 0.85f;    // starts smaller
+    public float openScale = 1.0f;       // ends normal
+    public float yPopPixels = 40f;       // small upward pop
+
+    bool isOpen = false;
+    Coroutine routine;
+
+    void Awake()
+    {
+        if (panel == null) panel = GetComponent<RectTransform>();
+        if (panelGroup == null) panelGroup = GetComponent<CanvasGroup>();
+        if (panelGroup == null) panelGroup = gameObject.AddComponent<CanvasGroup>();
+
+        HookButtons();
+        ForceClosedInstant(); // IMPORTANT: start CLOSED (also in AR)
+    }
+
+    void OnEnable() => HookButtons();
+    void OnDisable() => UnhookButtons();
+
+    void HookButtons()
+    {
+        if (bookButton != null)
+        {
+            bookButton.onClick.RemoveListener(Toggle);
+            bookButton.onClick.AddListener(Toggle);
+        }
+        if (blockerButton != null)
+        {
+            blockerButton.onClick.RemoveListener(Close);
+            blockerButton.onClick.AddListener(Close);
+        }
+    }
+
+    void UnhookButtons()
+    {
+        if (bookButton != null) bookButton.onClick.RemoveListener(Toggle);
+        if (blockerButton != null) blockerButton.onClick.RemoveListener(Close);
+    }
+
+    public void Toggle()
+    {
+        if (isOpen) Close();
+        else Open();
+    }
+
+    public void Open()
+    {
+        isOpen = true;
+
+        // show + allow clicks inside panel
+        panelGroup.alpha = 1f;
+        panelGroup.interactable = true;
+        panelGroup.blocksRaycasts = true;
+
+        // enable blocker so taps outside close it (and prevent AR tap placing while open)
+        if (blockerButton != null)
+        {
+            blockerButton.gameObject.SetActive(true);
+            var img = blockerButton.GetComponent<Image>();
+            if (img != null) img.raycastTarget = true;
+        }
+
+        StartAnim(open: true);
+    }
+
+    public void Close()
+    {
+        isOpen = false;
+
+        // animate closed, then disable raycast blocking
+        StartAnim(open: false, after: () =>
+        {
+            panelGroup.alpha = 0f;
+            panelGroup.interactable = false;
+            panelGroup.blocksRaycasts = false;
+
+            if (blockerButton != null)
+                blockerButton.gameObject.SetActive(false);
+        });
+    }
+
+    void ForceClosedInstant()
+    {
+        // CLOSED but ACTIVE (so it can animate later)
+        panelGroup.alpha = 0f;
+        panelGroup.interactable = false;
+        panelGroup.blocksRaycasts = false;
+
+        if (blockerButton != null)
+            blockerButton.gameObject.SetActive(false);
+
+        // scale down + small downward offset so it pops up nicely
+        panel.localScale = Vector3.one * closedScale;
+        panel.anchoredPosition = new Vector2(panel.anchoredPosition.x, panel.anchoredPosition.y - yPopPixels);
+
+        isOpen = false;
+    }
+
+    void StartAnim(bool open, System.Action after = null)
+    {
+        if (routine != null) StopCoroutine(routine);
+        routine = StartCoroutine(Anim(open, after));
+    }
+
+    IEnumerator Anim(bool open, System.Action after)
+    {
+        float t = 0f;
+
+        Vector3 startS = panel.localScale;
+        Vector3 endS = Vector3.one * (open ? openScale : closedScale);
+
+        float startY = panel.anchoredPosition.y;
+        float endY = open ? (startY + yPopPixels) : (startY - yPopPixels);
+
+        while (t < popDuration)
+        {
+            t += Time.unscaledDeltaTime;
+            float a = Mathf.Clamp01(t / popDuration);
+
+            panel.localScale = Vector3.Lerp(startS, endS, a);
+            panel.anchoredPosition = new Vector2(panel.anchoredPosition.x, Mathf.Lerp(startY, endY, a));
+
+            yield return null;
+        }
+
+        panel.localScale = endS;
+        panel.anchoredPosition = new Vector2(panel.anchoredPosition.x, endY);
+
+        after?.Invoke();
+        routine = null;
+    }
+}

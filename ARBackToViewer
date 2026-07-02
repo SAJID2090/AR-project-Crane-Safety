@@ -1,0 +1,43 @@
+using UnityEngine;
+using UnityEngine.SceneManagement;
+using UnityEngine.UI;
+
+public class ARBackToViewer : MonoBehaviour
+{
+    [Header("Assign in Inspector (recommended)")]
+    public Button btnAR;
+
+    [Header("Scene name to go back to")]
+    public string viewerSceneName = "ViewerScene";
+
+    private void Awake()
+    {
+        // Auto-find by name if you forgot to drag it
+        if (btnAR == null)
+        {
+            GameObject go = GameObject.Find("BTN_AR");
+            if (go != null) btnAR = go.GetComponent<Button>();
+        }
+
+        if (btnAR != null)
+        {
+            btnAR.onClick.RemoveAllListeners();
+            btnAR.onClick.AddListener(GoToViewer);
+        }
+        else
+        {
+            Debug.LogError("ARBackToViewer: BTN_AR not found. Drag BTN_AR into btnAR field.");
+        }
+    }
+
+    public void GoToViewer()
+    {
+        if (string.IsNullOrEmpty(viewerSceneName))
+        {
+            Debug.LogError("ARBackToViewer: viewerSceneName is empty.");
+            return;
+        }
+
+        SceneManager.LoadScene(viewerSceneName);
+    }
+}

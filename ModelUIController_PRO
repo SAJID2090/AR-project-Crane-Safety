@@ -1,0 +1,51 @@
+using UnityEngine;
+using UnityEngine.UI;
+
+public class ModelUIController_PRO : MonoBehaviour
+{
+    [Header("UI")]
+    public Button playPauseButton;   // BTN_PlayPause
+
+    [Header("Auto Rotate")]
+    public float rotateDegreesPerSecond = 35f;
+
+    // The currently spawned model (Viewer or AR) sets this
+    public static Transform CurrentModelRoot { get; private set; }
+
+    private bool autoRotate = false;
+
+    void Awake()
+    {
+        // Auto find if not dragged
+        if (playPauseButton == null)
+        {
+            var go = GameObject.Find("BTN_PlayPause");
+            if (go) playPauseButton = go.GetComponent<Button>();
+        }
+
+        if (playPauseButton != null)
+        {
+            playPauseButton.onClick.RemoveAllListeners();
+            playPauseButton.onClick.AddListener(ToggleAutoRotate);
+        }
+    }
+
+    void Update()
+    {
+        if (!autoRotate) return;
+        if (CurrentModelRoot == null) return;
+
+        CurrentModelRoot.Rotate(Vector3.up, rotateDegreesPerSecond * Time.deltaTime, Space.World);
+    }
+
+    private void ToggleAutoRotate()
+    {
+        if (CurrentModelRoot == null) return;
+        autoRotate = !autoRotate;
+    }
+
+    public static void SetCurrentModelRoot(Transform t)
+    {
+        CurrentModelRoot = t;
+    }
+}

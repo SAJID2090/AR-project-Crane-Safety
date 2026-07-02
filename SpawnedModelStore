@@ -1,0 +1,20 @@
+using System;
+using UnityEngine;
+
+public static class SpawnedModelStore
+{
+    public static Transform CurrentModelRoot { get; private set; }
+    public static event Action<Transform> OnModelChanged;
+
+    public static void SetModelRoot(Transform root)
+    {
+        CurrentModelRoot = root;
+        OnModelChanged?.Invoke(CurrentModelRoot);
+    }
+
+    public static void Clear()
+    {
+        CurrentModelRoot = null;
+        OnModelChanged?.Invoke(null);
+    }
+}

@@ -1,0 +1,63 @@
+using System;
+using System.Collections;
+using System.IO;
+using UnityEngine;
+
+public class ScreenshotManager_Gallery : MonoBehaviour
+{
+    public void TakeScreenshot()
+    {
+        StartCoroutine(Capture());
+    }
+
+    private IEnumerator Capture()
+    {
+        yield return new WaitForEndOfFrame();
+
+        Texture2D tex = new Texture2D(Screen.width, Screen.height, TextureFormat.RGB24, false);
+        tex.ReadPixels(new Rect(0, 0, Screen.width, Screen.height), 0, 0);
+        tex.Apply();
+
+        byte[] png = tex.EncodeToPNG();
+        Destroy(tex);
+
+        string filename = "ARApp_" + DateTime.Now.ToString("yyyyMMdd_HHmmss") + ".png";
+
+#if UNITY_ANDROID && !UNITY_EDITOR
+        string pictures = GetAndroidPicturesPath();
+        string folder = Path.Combine(pictures, "ARApp");
+        Directory.CreateDirectory(folder);
+
+        string path = Path.Combine(folder, filename);
+        File.WriteAllBytes(path, png);
+
+        // Tell gallery to index it
+        using (AndroidJavaClass mediaScanner = new AndroidJavaClass("android.media.MediaScannerConnection"))
+        using (AndroidJavaObject activity = new AndroidJavaClass("com.unity3d.player.UnityPlayer")
+               .GetStatic<AndroidJavaObject>("currentActivity"))
+        using (AndroidJavaObject context = activity.Call<AndroidJavaObject>("getApplicationContext"))
+        {
+            mediaScanner.CallStatic("scanFile", context, new string[] { path }, null, null);
+        }
+
+        Debug.Log("Saved to Gallery: " + path);
+#else
+        // Editor fallback
+        string path = Path.Combine(Application.dataPath, filename);
+        File.WriteAllBytes(path, png);
+        Debug.Log("Saved: " + path);
+#endif
+    }
+
+#if UNITY_ANDROID && !UNITY_EDITOR
+    private string GetAndroidPicturesPath()
+    {
+        using (AndroidJavaClass env = new AndroidJavaClass("android.os.Environment"))
+        {
+            AndroidJavaObject dir = env.CallStatic<AndroidJavaObject>("getExternalStoragePublicDirectory",
+                env.GetStatic<string>("DIRECTORY_PICTURES"));
+            return dir.Call<string>("getAbsolutePath");
+        }
+    }
+#endif
+}

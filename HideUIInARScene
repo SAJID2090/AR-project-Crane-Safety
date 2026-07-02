@@ -1,0 +1,24 @@
+using UnityEngine;
+using UnityEngine.SceneManagement;
+
+public class HideUIInARScene : MonoBehaviour
+{
+    [Header("Objects to hide only in ARScene")]
+    public GameObject[] hideInAR;
+
+    [Header("Scene name that means AR mode")]
+    public string arSceneName = "ARScene";
+
+    void Start()
+    {
+        bool isAR = SceneManager.GetActiveScene().name == arSceneName;
+
+        if (hideInAR == null) return;
+
+        foreach (var go in hideInAR)
+        {
+            if (go != null)
+                go.SetActive(!isAR);
+        }
+    }
+}
